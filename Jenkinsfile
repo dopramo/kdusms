@@ -2,7 +2,8 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "dopramo/kdusms"
+        DOCKER_HUB_USER = 'dopramo'
+        IMAGE_NAME = 'dopramo/kdusms'
         CONTAINER_NAME = "kdusms_app"
     }
 
@@ -26,12 +27,24 @@ pipeline {
             }
         }
 
+        stage('Push to Docker Hub') {
+            steps {
+                withCredentials([string(credentialsId: 'docker-hub-token', variable: 'DOCKER_TOKEN')]) {
+                    sh '''
+                    echo $DOCKER_TOKEN | docker login -u ${DOCKER_HUB_USER} --password-stdin
+                    docker tag ${IMAGE_NAME}:latest ${IMAGE_NAME}:latest
+                    docker push ${IMAGE_NAME}:latest
+                    '''
+                }
+            }
+        }
+
         stage('Run Container') {
             steps {
                 sh '''
                 docker stop ${CONTAINER_NAME} || true
                 docker rm ${CONTAINER_NAME} || true
-                docker run -d --name ${CONTAINER_NAME} -p 80:80 ${IMAGE_NAME}:latest
+                docker run -d --name ${CONTAINER_NAME} -p 3000:80 ${IMAGE_NAME}:latest
                 '''
             }
         }
