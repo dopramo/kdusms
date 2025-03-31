@@ -1,40 +1,37 @@
 pipeline {
     agent any
+
     environment {
-        DOCKER_IMAGE = 'kdusms-php-app'
-        DOCKER_TAG = 'latest'
+        IMAGE_NAME = "dopramo/kdusms"
+        CONTAINER_NAME = "kdusms_app"
     }
+
     stages {
-        stage('Checkout') {
+        stage('Clone Repository') {
             steps {
                 git 'https://github.com/dopramo/kdusms.git'
             }
         }
-        stage('Install Dependencies') {
+
+        stage('Security Scan') {
             steps {
-                sh 'composer install'
+                sh 'trivy fs --exit-code 1 --severity HIGH,CRITICAL . || true'
+                sh 'docker scout quickview ${IMAGE_NAME} || true'
             }
         }
+
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t $DOCKER_IMAGE:$DOCKER_TAG .'
+                sh 'docker build -t ${IMAGE_NAME}:latest .'
             }
         }
-        stage('Push Docker Image') {
-            steps {
-                withDockerRegistry([credentialsId: 'docker-hub-credentials', url: '']) {
-                    sh 'docker tag $DOCKER_IMAGE:$DOCKER_TAG your-dockerhub-username/$DOCKER_IMAGE:$DOCKER_TAG'
-                    sh 'docker push your-dockerhub-username/$DOCKER_IMAGE:$DOCKER_TAG'
-                }
-            }
-        }
-        stage('Deploy to EC2') {
+
+        stage('Run Container') {
             steps {
                 sh '''
-                docker stop kdusms-php-app || true
-                docker rm kdusms-php-app || true
-                docker pull your-dockerhub-username/$DOCKER_IMAGE:$DOCKER_TAG
-                docker run -d --name kdusms-php-app -p 80:80 your-dockerhub-username/$DOCKER_IMAGE:$DOCKER_TAG
+                docker stop ${CONTAINER_NAME} || true
+                docker rm ${CONTAINER_NAME} || true
+                docker run -d --name ${CONTAINER_NAME} -p 80:80 ${IMAGE_NAME}:latest
                 '''
             }
         }
